@@ -78,8 +78,8 @@ class App:
     def __init__(self, root):
         self.root = root
         root.title("DUALORA · Visual Quality Control")
-        root.geometry("760x590")
-        root.minsize(640, 480)
+        root.geometry("1080x760")
+        root.minsize(850, 620)
         root.configure(bg="#101827")
         style = ttk.Style()
         style.theme_use("clam")
@@ -121,7 +121,7 @@ class App:
         self.error = None
         ttk.Button(extras, text="Сохранить профиль", command=self.save_layout).pack(side="left", padx=4)
         ttk.Button(extras, text="Применить профиль", command=self.restore_layout).pack(side="left", padx=4)
-        self.diagram = tk.Canvas(host, height=140, bg="#172337", highlightthickness=0)
+        self.diagram = tk.Canvas(host, height=230, bg="#172337", highlightthickness=0)
         self.diagram.pack(fill="x", pady=(8, 4))
         self.diagram.bind("<Configure>", lambda event: self.draw_diagram())
         self.diagram.bind("<ButtonPress-1>", self.drag_start)
@@ -168,7 +168,7 @@ class App:
         full_w = max(d["x"] + d["width"] for d in screens) - min_x
         full_h = max(d["y"] + d["height"] for d in screens) - min_y
         scale = min((max(canvas.winfo_width(), 300) - 50) / max(full_w, 1),
-                    110 / max(full_h, 1))
+                    195 / max(full_h, 1))
         self.diagram_scale = scale
         for index, d in enumerate(screens, 1):
             x = 20 + (d["x"] - min_x) * scale
@@ -180,7 +180,7 @@ class App:
                                     fill="#263e59", width=2)
             canvas.create_text(x + w / 2, y + h / 2, fill="white",
                                text=f"{index} · {d['width']}×{d['height']}")
-        canvas.create_text(20, 132, anchor="w", fill="#93aac6",
+        canvas.create_text(20, 220, anchor="w", fill="#93aac6",
                            text="Перетащите экран мышью; для применения подтвердите изменение")
 
 
@@ -561,6 +561,10 @@ class App:
 if __name__ == "__main__":
     if platform.system() != "Windows":
         raise SystemExit("DUALORA needs Windows 10/11")
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except (AttributeError, OSError):
+        pass
     app = tk.Tk()
     App(app)
     app.mainloop()
