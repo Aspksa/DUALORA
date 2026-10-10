@@ -15,9 +15,10 @@ from datetime import datetime
 from history import add_event, read_history
 from quality_advisor import recommend
 from wallpaper_tools import apply_wallpaper, account_label, refresh_explanation
+from gaming_advisor import assess_display
 from cursor_layout import arrange_side_by_side
 
-APP_VERSION = "0.7.0"
+APP_VERSION = "0.8.0"
 REPORT_PATH = Path.home() / "DUALORA" / "diagnostics.json"
 
 
@@ -152,6 +153,7 @@ class App:
         ttk.Button(visual, text="Обои 5K", command=self.wallpaper_5k).pack(side="left", padx=4)
         ttk.Button(visual, text="Герцовка и FPS", command=self.refresh_help).pack(side="left", padx=4)
         ttk.Button(visual, text="Пользователь Windows", command=self.account_info).pack(side="left", padx=4)
+        ttk.Button(visual, text="Игровая оптимизация", command=self.gaming_diagnostics).pack(side="left", padx=4)
         ttk.Checkbutton(host, text="Предлагать профиль при подключении экрана",
                         variable=self.auto_profile).pack(anchor="w")
         self.refresh()
@@ -405,6 +407,29 @@ class App:
         messagebox.showinfo("Пользователь Windows",
             "Текущая учётная запись: " + account_label() +
             "\\nDUALORA использует текущий вход Windows и не собирает пароли.")
+
+    def gaming_diagnostics(self):
+        if not self.details:
+            messagebox.showwarning("Игры", "Активные дисплеи не обнаружены.")
+            return
+        number = simpledialog.askinteger("Игровой монитор",
+            "Номер дисплея (1–" + str(len(self.details)) + "):",
+            parent=self.root, minvalue=1, maxvalue=len(self.details))
+        if number is None:
+            return
+        try:
+            d = self.details[number - 1]
+            report = assess_display(d, available_modes(d["device"]))
+            lines = [report["device"], "Разрешение: " + report["resolution"],
+                "Текущая частота: " + str(report["current_hz"]) + " Гц",
+                "Максимальная доступная: " + str(report["max_available_hz"]) + " Гц",
+                "VRR: " + report["vrr_status"], "", *report["tips"]]
+            self.write("\\n".join(lines))
+            if messagebox.askyesno("Игровой режим", 
+                    "Открыть параметры Windows для проверки Game Mode, GPU и VRR?"):
+                os.startfile("ms-settings:gaming-gamemode")
+        except Exception as exc:
+            messagebox.showerror("Игровая диагностика", str(exc))
 
     def quick_profile(self, name):
         try:

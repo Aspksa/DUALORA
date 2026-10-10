@@ -5,7 +5,7 @@ import dualora
 
 class CoreTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(dualora.APP_VERSION, "0.7.0")
+        self.assertEqual(dualora.APP_VERSION, "0.8.0")
 
     def test_enumeration_non_windows(self):
         with patch("dualora.platform.system", return_value="Linux"):
