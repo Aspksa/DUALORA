@@ -1,9 +1,7 @@
 # DUALORA project state
-
-- Version: 0.1.0
-- Stage: functional GUI prototype
-- Supported: Windows 10/11
-- Dependency: Python 3.10+ with Tkinter
-- Known limitation: CI cannot validate real HDMI/DP output; manual hardware testing required.
-- Security: no elevated privileges; asks for confirmation before projection changes.
-- next_action: Run DUALORA on the laptop with AQ32H3, save diagnostic JSON, verify extend mode and input selection; then implement QueryDisplayConfig for physical paths and EDID-friendly labels.
+- Version: 0.2.0
+- Added: Windows device/monitor identification, active video modes (resolution/hz), position profiles, rollback prompt, CI-produced portable EXE.
+- Device identification: EnumDisplayDevicesW and EnumDisplaySettingsW; no physical HDMI signal measurement.
+- Tests: GitHub Windows+Linux unittest and compile; EXE built on Windows.
+- Windows hardware verification: pending on actual AQ32H3 laptop.
+- next_action: Verify checks and EXE artifact in GitHub Actions, run the EXE on Windows with AQ32H3 and share the exported diagnostics JSON.

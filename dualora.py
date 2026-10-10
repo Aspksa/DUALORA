@@ -9,10 +9,11 @@ from pathlib import Path
 import platform
 import subprocess
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
+from display_engine import enumerate_displays, position_snapshot, read_profiles, save_profile, apply_positions
 from datetime import datetime
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 REPORT_PATH = Path.home() / "DUALORA" / "diagnostics.json"
 
 
@@ -112,9 +113,62 @@ class App:
         ttk.Button(extras, text="Только ноутбук", command=lambda: self.change("internal")).pack(side="left", padx=4)
         ttk.Button(extras, text="Только монитор", command=lambda: self.change("external")).pack(side="left", padx=4)
         self.displays = []
+        self.details = []
         self.identifiers = []
         self.error = None
+        ttk.Button(extras, text="Сохранить профиль", command=self.save_layout).pack(side="left", padx=4)
+        ttk.Button(extras, text="Применить профиль", command=self.restore_layout).pack(side="left", padx=4)
         self.refresh()
+
+    def save_layout(self):
+        if not self.details:
+            messagebox.showwarning("Нет экранов", "Обновите диагностику.")
+            return
+        name = simpledialog.askstring("Профиль", "Название:", parent=self.root)
+        if name is None:
+            return
+        try:
+            save_profile(name, self.details)
+            messagebox.showinfo("Готово", "Профиль сохранён.")
+        except Exception as exc:
+            messagebox.showerror("Ошибка", str(exc))
+
+    def restore_layout(self):
+        try:
+            profiles = read_profiles()
+            if not profiles:
+                messagebox.showinfo("Профили", "Пока нет сохранённых профилей.")
+                return
+            name = simpledialog.askstring("Профили", "Название профиля:\n" + "\n".join(profiles), parent=self.root)
+            if name is None:
+                return
+            if name not in profiles:
+                messagebox.showwarning("Профили", "Профиль не найден.")
+                return
+            previous = position_snapshot(enumerate_displays())
+            if not messagebox.askyesno("Безопасность", "Применить профиль? Подтвердите новый вид в течение 15 секунд."):
+                return
+            apply_positions(profiles[name])
+            state = {"finished": False}
+            def revert():
+                if not state["finished"]:
+                    state["finished"] = True
+                    try:
+                        apply_positions(previous)
+                    except Exception as exc:
+                        messagebox.showerror("Откат не удался", str(exc))
+            timer = self.root.after(15000, revert)
+            ok = messagebox.askyesno("Экран", "Всё видно на обоих экранах? Сохранить расположение?")
+            if ok and not state["finished"]:
+                state["finished"] = True
+                self.root.after_cancel(timer)
+            elif not state["finished"]:
+                self.root.after_cancel(timer)
+                revert()
+            self.refresh()
+        except Exception as exc:
+            messagebox.showerror("Ошибка профиля", str(exc))
+            self.refresh()
 
     def write(self, message):
         self.output.configure(state="normal")
@@ -129,6 +183,11 @@ class App:
         except Exception as exc:
             self.displays = []
             self.error = str(exc)
+        try:
+            self.details = enumerate_displays()
+        except Exception as exc:
+            self.details = []
+            self.error = (self.error or "") + " / details: " + str(exc)
         self.identifiers = monitor_identifiers()
         count = len(self.displays)
         self.summary.set(f"Активных областей рабочего стола: {count}")
@@ -139,6 +198,10 @@ class App:
             lines.append(f"Экран {d['index']}: {d['width']}×{d['height']}  X={d['left']} Y={d['top']}")
         if not self.displays:
             lines.append("Активные области не обнаружены.")
+        lines += ["", "ИДЕНТИФИКАЦИЯ МОНИТОРОВ / ВИДЕОРЕЖИМЫ"]
+        for d in self.details:
+            lines.append(f"{d['device']}: {d['monitor']} | {d['width']}x{d['height']} @ {d['hz']} Hz | ({d['x']}, {d['y']})")
+            lines.append("  Device ID: " + d["monitor_id"])
         lines += ["", f"ЗАПИСИ ПОДКЛЮЧЁННЫХ МОНИТОРОВ (WMI): {len(self.identifiers)}",
                   "Эти записи не гарантируют наличие изображения."]
         for item in self.identifiers:
@@ -169,7 +232,7 @@ class App:
     def export(self):
         payload = {"app": "DUALORA", "version": APP_VERSION, "created": datetime.now().isoformat(),
                    "platform": platform.platform(), "active_desktops": self.displays,
-                   "wmi_monitors": self.identifiers, "error": self.error}
+                   "wmi_monitors": self.identifiers, "display_modes": self.details, "error": self.error}
         try:
             REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
             REPORT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
