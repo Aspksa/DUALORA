@@ -1,0 +1,20 @@
+name: DUALORA checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  validate:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile code
+        run: python -m compileall -q dualora.py tests
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
