@@ -1,1 +1,4 @@
-# DUALORA v0.5.1\nAdded cursor crossing fix: buttons to align external monitor left/right of laptop without gaps. Existing profile confirmation and timed rollback used.\nnext_action: Test mouse crossing on laptop/AQ32H3; verify hardware behavior.\n
+# DUALORA v0.6.0
+Features: quality selector; higher-resolution/refresh recommendations; existing Windows-safe rollback and monitor layout.
+CI: Windows and Linux tests; Windows EXE packaging.
+next_action: Validate built application with AQ32H3, including mode rollback, and iterate visual design with hardware feedback.
