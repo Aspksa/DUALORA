@@ -13,8 +13,9 @@ from tkinter import ttk, messagebox, simpledialog
 from display_engine import enumerate_displays, position_snapshot, read_profiles, save_profile, apply_positions, available_modes, apply_video_mode
 from datetime import datetime
 from history import add_event, read_history
+from cursor_layout import arrange_side_by_side
 
-APP_VERSION = "0.5.0"
+APP_VERSION = "0.5.1"
 REPORT_PATH = Path.home() / "DUALORA" / "diagnostics.json"
 
 
@@ -138,6 +139,11 @@ class App:
         ttk.Button(tools, text="Профиль Игры", command=lambda: self.quick_profile("Игры")).pack(side="left", padx=4)
         ttk.Button(tools, text="Видеорежим", command=self.choose_video_mode).pack(side="left", padx=4)
         ttk.Button(tools, text="Журнал", command=self.show_history).pack(side="left", padx=4)
+        cursor_controls = ttk.Frame(host)
+        cursor_controls.pack(fill="x", pady=(2, 5))
+        ttk.Label(cursor_controls, text="Переход мыши: внешний экран").pack(side="left", padx=4)
+        ttk.Button(cursor_controls, text="СЛЕВА", command=lambda: self.fix_cursor("left")).pack(side="left", padx=4)
+        ttk.Button(cursor_controls, text="СПРАВА", command=lambda: self.fix_cursor("right")).pack(side="left", padx=4)
         ttk.Checkbutton(host, text="Предлагать профиль при подключении экрана",
                         variable=self.auto_profile).pack(anchor="w")
         self.refresh()
@@ -302,6 +308,24 @@ class App:
                 break
         except Exception as exc:
             messagebox.showerror("Профили", str(exc))
+
+    def fix_cursor(self, side):
+        try:
+            current = enumerate_displays()
+            proposed = arrange_side_by_side(current, side)
+            if proposed == position_snapshot(current):
+                messagebox.showinfo("Переход мыши", "Экраны уже стоят рядом. Проверьте, что включён режим «Расширить», а не «Дублировать».")
+                return
+            if not messagebox.askyesno("Переход мыши",
+                    "Мониторы будут выстроены рядом. Курсор сможет переходить через общую границу. Продолжить?"):
+                return
+            # Uses the existing confirmed change path with timed rollback.
+            self.apply_named_profile("Переход мыши", proposed)
+        except ValueError as exc:
+            messagebox.showwarning("Переход мыши", str(exc) +
+                "\\nПроверьте Win+P → Расширить и нажмите «Обновить диагностику».")
+        except Exception as exc:
+            messagebox.showerror("Переход мыши", str(exc))
 
     def quick_profile(self, name):
         try:
