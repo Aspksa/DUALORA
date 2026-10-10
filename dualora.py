@@ -16,9 +16,10 @@ from history import add_event, read_history
 from quality_advisor import recommend
 from wallpaper_tools import apply_wallpaper, account_label, refresh_explanation
 from gaming_advisor import assess_display
+from fps_capture import load_presentmon, summary
 from cursor_layout import arrange_side_by_side
 
-APP_VERSION = "0.8.0"
+APP_VERSION = "0.9.0"
 REPORT_PATH = Path.home() / "DUALORA" / "diagnostics.json"
 
 
@@ -154,6 +155,7 @@ class App:
         ttk.Button(visual, text="Герцовка и FPS", command=self.refresh_help).pack(side="left", padx=4)
         ttk.Button(visual, text="Пользователь Windows", command=self.account_info).pack(side="left", padx=4)
         ttk.Button(visual, text="Игровая оптимизация", command=self.gaming_diagnostics).pack(side="left", padx=4)
+        ttk.Button(visual, text="График FPS", command=self.fps_window).pack(side="left", padx=4)
         ttk.Checkbutton(host, text="Предлагать профиль при подключении экрана",
                         variable=self.auto_profile).pack(anchor="w")
         self.refresh()
@@ -430,6 +432,45 @@ class App:
                 os.startfile("ms-settings:gaming-gamemode")
         except Exception as exc:
             messagebox.showerror("Игровая диагностика", str(exc))
+
+    def fps_window(self):
+        path = filedialog.askopenfilename(parent=self.root, title="PresentMon CSV — реальные кадры",
+                     filetypes=[("CSV PresentMon", "*.csv")])
+        if not path: return
+        window=tk.Toplevel(self.root)
+        window.title("DUALORA · FPS / frametime")
+        window.geometry("800x450")
+        graph=tk.Canvas(window,bg="#131e30",highlightthickness=0)
+        graph.pack(fill="both",expand=True,padx=12,pady=12)
+        status=tk.StringVar(value="Чтение данных...")
+        ttk.Label(window,textvariable=status).pack(pady=5)
+        active={"value":True}
+        def stop(): active["value"]=False; window.destroy()
+        window.protocol("WM_DELETE_WINDOW",stop)
+        def update():
+            if not active["value"]: return
+            try:
+                values=load_presentmon(path)
+                metrics=summary(values)
+                graph.delete("all")
+                w=max(400,graph.winfo_width()); h=max(220,graph.winfo_height())
+                if len(values)>1:
+                    step=max(1,len(values)//300)
+                    view=values[::step][-300:]
+                    ymax=max(33.3,max(view))
+                    points=[]
+                    for i,v in enumerate(view):
+                        x=15+i*(w-30)/max(1,len(view)-1)
+                        y=h-20-min(v/ymax,1)*(h-50)
+                        points.extend((x,y))
+                    if len(points)>=4:graph.create_line(*points,fill="#63caff",width=2)
+                    graph.create_text(15,12,anchor="w",fill="white",
+                        text="Frametime (ms) — PresentMon CSV")
+                status.set(f"Средний FPS: {metrics['fps']} | 1% Low: {metrics['one_percent_low']} | "
+                           f"Среднее время кадра: {metrics['average_ms']} мс | Просадки: {metrics['stutters']}")
+            except Exception as exc: status.set("Ошибка файла: "+str(exc))
+            if active["value"]:window.after(2000,update)
+        update()
 
     def quick_profile(self, name):
         try:
