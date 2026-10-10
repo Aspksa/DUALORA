@@ -138,3 +138,56 @@ def apply_positions(snapshot):
             raise RuntimeError("Failed to stage position")
     if change(None, None, None, 0, None) != 0:
         raise RuntimeError("Failed to apply positions")
+
+
+# Video modes use documented ChangeDisplaySettingsExW; staged changes are never persisted.
+def available_modes(device_name):
+    if platform.system() != "Windows":
+        raise RuntimeError("Windows required")
+    api = ctypes.WinDLL("user32", use_last_error=True)
+    api.EnumDisplaySettingsW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(DEVMODE)]
+    api.EnumDisplaySettingsW.restype = wintypes.BOOL
+    found = set()
+    index = 0
+    while index < 1000:
+        mode = DEVMODE()
+        mode.size = ctypes.sizeof(mode)
+        if not api.EnumDisplaySettingsW(device_name, index, ctypes.byref(mode)):
+            break
+        if 30 <= mode.hz <= 500 and mode.width >= 640 and mode.height >= 480:
+            found.add((int(mode.width), int(mode.height), int(mode.hz)))
+        index += 1
+    return [{"width": w, "height": h, "hz": hz} for w, h, hz in sorted(found)]
+
+
+def apply_video_mode(device_name, selection):
+    screens = enumerate_displays()
+    old = next((screen for screen in screens if screen["device"] == device_name), None)
+    if old is None:
+        raise ValueError("Monitor not active")
+    required = ("width", "height", "hz")
+    if any(type(selection.get(key)) is not int for key in required):
+        raise ValueError("Invalid video mode")
+    requested = tuple(selection[key] for key in required)
+    candidates = available_modes(device_name)
+    if requested not in {tuple(item[k] for k in required) for item in candidates}:
+        raise ValueError("Unsupported video mode")
+    api = ctypes.WinDLL("user32", use_last_error=True)
+    modes = api.EnumDisplaySettingsW
+    modes.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(DEVMODE)]
+    modes.restype = wintypes.BOOL
+    change = api.ChangeDisplaySettingsExW
+    change.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(DEVMODE), wintypes.HWND,
+                       wintypes.DWORD, wintypes.LPVOID]
+    change.restype = wintypes.LONG
+    mode = DEVMODE()
+    mode.size = ctypes.sizeof(mode)
+    if not modes(device_name, 0xffffffff, ctypes.byref(mode)):
+        raise RuntimeError("Cannot load current mode")
+    mode.width, mode.height, mode.hz = requested
+    mode.fields = 0x80000 | 0x100000 | 0x400000
+    if change(device_name, ctypes.byref(mode), None, 0x2, None) != 0:
+        raise RuntimeError("Mode validation failed")
+    rc = change(device_name, ctypes.byref(mode), None, 0, None)
+    if rc:
+        raise RuntimeError("Windows rejected mode: " + str(rc))

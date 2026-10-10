@@ -1,24 +1,22 @@
-# DUALORA v0.3.0 — Control Center
+# DUALORA v0.4.0 — Interactive Display Control
 
-DUALORA manages extended monitor desktops on Windows 10/11.
+Windows 10/11 utility for two or more desktop displays.
 
-## What's new
+## New in v0.4.0
+- Drag monitor rectangles in the Control Center layout, then confirm or revert (15-second timeout while app is running).
+- Select supported video resolution and refresh rate through native Windows display API, with preflight validation and confirmation.
+- Optional 5-second polling detects new Windows desktop displays and **offers** to restore a matching named monitor profile. It never changes profiles without consent.
+- Work / Games presets, AQ32H3 troubleshooting, diagnostics JSON, portable EXE.
 
-- Dark Control Center with a proportional diagram of active monitor desktop rectangles.
-- AQ32H3 troubleshooting wizard explaining actual Windows status and physical signal limitations.
-- One-click Work and Games position profiles: first use saves the current layout; later use restores it with confirmation.
-- Detailed device, monitor and refresh-rate report from Windows display APIs.
-- Native projection options, named profiles, diagnostics export.
-- Portable DUALORA.exe in successful Windows Actions artifacts (no Python required).
+## Installation
+Open the successful GitHub Actions run and download the `DUALORA-Windows-v0.4.0` artifact ZIP. Unzip and launch `DUALORA.exe` without installing Python.
 
-**Limitations:** The visual arrangement is read-only in this version; use profiles or Windows display settings to change layout. Monitor identification is subject to driver/EDID capabilities. An active Windows video mode does not prove a good physical HDMI/DP connection.
-
-## Install
-
-Open [GitHub Actions](https://github.com/Aspksa/DUALORA/actions), select the successful **DUALORA checks** run, download **DUALORA-Windows-v0.2.0** artifact (the artifact label will be updated to v0.3.0 in this version), extract and run DUALORA.exe.
-
-For source use Python 3.10+ and Start_DUALORA.bat.
+## Safety and limits
+- The tool reads modes exposed by the GPU/display driver, **not** actual HDMI voltage or physical pixel output.
+- Monitor IDs (e.g. AQ32H3) are driver dependent.
+- Timeout rollback needs a running Tk event loop; Windows may not restore configuration after a system crash or application termination. Keep access to Windows Display settings.
+- Connection detection uses polling and prompts; it does not silently apply saved configurations.
+- The preview is diagrammatic and drag moves can require further fine-tuning in Windows Settings.
 
 ## Tests
-
 `python -m unittest discover -s tests -v`.
