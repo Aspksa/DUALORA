@@ -1,4 +1,1 @@
-# DUALORA v0.6.0
-Features: quality selector; higher-resolution/refresh recommendations; existing Windows-safe rollback and monitor layout.
-CI: Windows and Linux tests; Windows EXE packaging.
-next_action: Validate built application with AQ32H3, including mode rollback, and iterate visual design with hardware feedback.
+# DUALORA 0.7.0\nFeatures: local wallpaper selection, Windows account display, screen refresh/FPS education; inherited video-mode controls and layouts.\nNo guarantee of improved game FPS or 5K display output. Hardware AQ32H3 tests pending.\nnext_action: inspect CI, launch EXE, test 5K wallpaper, refresh modes and rollback on Windows.\n
