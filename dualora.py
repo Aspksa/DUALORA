@@ -10,10 +10,10 @@ import platform
 import subprocess
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
-from display_engine import enumerate_displays, position_snapshot, read_profiles, save_profile, apply_positions
+from display_engine import enumerate_displays, position_snapshot, read_profiles, save_profile, apply_positions, available_modes, apply_video_mode
 from datetime import datetime
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.4.0"
 REPORT_PATH = Path.home() / "DUALORA" / "diagnostics.json"
 
 
@@ -121,19 +121,34 @@ class App:
         self.diagram = tk.Canvas(host, height=140, bg="#172337", highlightthickness=0)
         self.diagram.pack(fill="x", pady=(8, 4))
         self.diagram.bind("<Configure>", lambda event: self.draw_diagram())
+        self.diagram.bind("<ButtonPress-1>", self.drag_start)
+        self.diagram.bind("<B1-Motion>", self.drag_motion)
+        self.diagram.bind("<ButtonRelease-1>", self.drag_end)
+        self.drag_index = None
+        self.drag_origin = None
+        self.drag_preview = None
+        self.diagram_regions = []
+        self.auto_profile = tk.BooleanVar(value=False)
+        self.known_devices = ()
         tools = ttk.Frame(host)
         tools.pack(fill="x", pady=4)
         ttk.Button(tools, text="Мастер чёрного экрана", command=self.troubleshoot).pack(side="left", padx=4)
         ttk.Button(tools, text="Профиль Работа", command=lambda: self.quick_profile("Работа")).pack(side="left", padx=4)
         ttk.Button(tools, text="Профиль Игры", command=lambda: self.quick_profile("Игры")).pack(side="left", padx=4)
+        ttk.Button(tools, text="Видеорежим", command=self.choose_video_mode).pack(side="left", padx=4)
+        ttk.Checkbutton(host, text="Предлагать профиль при подключении экрана",
+                        variable=self.auto_profile).pack(anchor="w")
         self.refresh()
+        self.known_devices = tuple(sorted(d["device"] for d in self.details))
+        self.root.after(5000, self.watch_monitors)
 
     def draw_diagram(self):
         if not hasattr(self, "diagram"):
             return
         canvas = self.diagram
         canvas.delete("all")
-        screens = self.details
+        screens = self.drag_preview if self.drag_preview is not None else self.details
+        self.diagram_regions = []
         if not screens:
             canvas.create_text(20, 65, anchor="w", fill="#e5edfa",
                                text="Нет активных видеорежимов. Нажмите «Обновить диагностику».")
@@ -144,17 +159,127 @@ class App:
         full_h = max(d["y"] + d["height"] for d in screens) - min_y
         scale = min((max(canvas.winfo_width(), 300) - 50) / max(full_w, 1),
                     110 / max(full_h, 1))
+        self.diagram_scale = scale
         for index, d in enumerate(screens, 1):
             x = 20 + (d["x"] - min_x) * scale
             y = 12 + (d["y"] - min_y) * scale
             w = d["width"] * scale
             h = d["height"] * scale
+            self.diagram_regions.append((x, y, x + w, y + h, index - 1))
             canvas.create_rectangle(x, y, x + w, y + h, outline="#58c7ff",
                                     fill="#263e59", width=2)
             canvas.create_text(x + w / 2, y + h / 2, fill="white",
                                text=f"{index} · {d['width']}×{d['height']}")
         canvas.create_text(20, 132, anchor="w", fill="#93aac6",
-                           text="Схема расположения (для изменения выберите профиль)")
+                           text="Перетащите экран мышью; для применения подтвердите изменение")
+
+
+    def drag_start(self, event):
+        for x1, y1, x2, y2, index in reversed(self.diagram_regions):
+            if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                self.drag_index = index
+                self.drag_origin = (event.x, event.y)
+                self.drag_preview = [dict(d) for d in self.details]
+                break
+
+    def drag_motion(self, event):
+        if self.drag_index is None:
+            return
+        dx = round((event.x - self.drag_origin[0]) / max(self.diagram_scale, 0.0001))
+        dy = round((event.y - self.drag_origin[1]) / max(self.diagram_scale, 0.0001))
+        d = self.drag_preview[self.drag_index]
+        original = self.details[self.drag_index]
+        d["x"], d["y"] = original["x"] + dx, original["y"] + dy
+        self.draw_diagram()
+
+    def drag_end(self, event):
+        if self.drag_index is None:
+            return
+        new_positions = position_snapshot(self.drag_preview)
+        self.drag_index = None
+        self.drag_preview = None
+        self.draw_diagram()
+        if new_positions != position_snapshot(self.details):
+            self.apply_named_profile("Перетаскивание", new_positions)
+
+    def choose_video_mode(self):
+        if not self.details:
+            messagebox.showwarning("Видео", "Нет доступных экранов")
+            return
+        choice = simpledialog.askinteger("Монитор", "Номер монитора от 1 до " + str(len(self.details)),
+                                         minvalue=1, maxvalue=len(self.details), parent=self.root)
+        if choice is None:
+            return
+        display = self.details[choice - 1]
+        try:
+            options = available_modes(display["device"])
+            shown = options[:35]
+            labels = [str(i) + ": " + str(m["width"]) + "x" + str(m["height"]) +
+                      " @ " + str(m["hz"]) + "Hz" for i, m in enumerate(shown, 1)]
+            if not shown:
+                messagebox.showwarning("Видеорежим", "Режимы не обнаружены")
+                return
+            selected = simpledialog.askinteger("Доступные режимы", "\n".join(labels),
+                                                minvalue=1, maxvalue=len(shown), parent=self.root)
+            if selected is None:
+                return
+            if not messagebox.askyesno("Безопасность", "Временно применить режим с возможностью отката?"):
+                return
+            before = {key: int(display[key]) for key in ("width", "height", "hz")}
+            apply_video_mode(display["device"], shown[selected-1])
+            self.confirm_change(lambda: apply_video_mode(display["device"], before))
+        except Exception as exc:
+            messagebox.showerror("Видеорежим", str(exc))
+        self.refresh()
+
+    def confirm_change(self, rollback):
+        state = {"finished": False}
+        def restore():
+            if state["finished"]:
+                return
+            state["finished"] = True
+            try:
+                rollback()
+            except Exception as exc:
+                messagebox.showerror("Ошибка отката", str(exc))
+        # Dialog has a nested Tk event loop: 15-second callback can run.
+        timer = self.root.after(15000, restore)
+        confirmed = messagebox.askyesno("Подтверждение", "Всё видно? Сохранить настройки?")
+        if confirmed and not state["finished"]:
+            state["finished"] = True
+            self.root.after_cancel(timer)
+        elif not state["finished"]:
+            self.root.after_cancel(timer)
+            restore()
+
+    def watch_monitors(self):
+        try:
+            devices = tuple(sorted(d["device"] for d in enumerate_displays()))
+            added = bool(set(devices) - set(self.known_devices))
+            if devices != self.known_devices:
+                self.known_devices = devices
+                self.refresh()
+                if added and self.auto_profile.get():
+                    self.root.after(100, self.offer_profile)
+        except Exception:
+            pass
+        finally:
+            self.root.after(5000, self.watch_monitors)
+
+    def offer_profile(self):
+        try:
+            current = position_snapshot(enumerate_displays())
+            for name, profile in read_profiles().items():
+                try:
+                    from display_engine import validate
+                    validate(profile, current)
+                except (ValueError, KeyError, TypeError):
+                    continue
+                if messagebox.askyesno("Подключён монитор", "Применить профиль «" + name + "»?"):
+                    self.apply_named_profile(name, profile)
+                break
+        except Exception as exc:
+            messagebox.showerror("Профили", str(exc))
 
     def quick_profile(self, name):
         try:
