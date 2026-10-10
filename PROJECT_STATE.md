@@ -1,4 +1,5 @@
-# DUALORA 0.4.0
-Implemented: mouse-driven layout positioning, video mode choice, opt-in profile recommendation after connection, portable EXE CI.
-Known: no physical video-signal measurement; timed rollback needs running app; monitor hardware QA remains unverified.
-next_action: Test v0.4.0 EXE with AQ32H3, verify drag layout and mode recovery, export diagnostics JSON, assess next release.
+# DUALORA state
+Version: 0.5.0
+Implemented: monitor layout canvas, video modes, profiles, consent-based monitor watcher, AQ32H3 cross-check diagnostic, bounded local history window, EXE CI build.
+Known: Win32 active paths are not proof of functioning HDMI/DP electrical signaling. Hardware test still needed.
+next_action: Download successful Windows build, verify on AQ32H3, export diagnostic JSON, test recovery and journal; investigate reported issues before v0.5.1.

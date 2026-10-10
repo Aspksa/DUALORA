@@ -12,8 +12,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from display_engine import enumerate_displays, position_snapshot, read_profiles, save_profile, apply_positions, available_modes, apply_video_mode
 from datetime import datetime
+from history import add_event, read_history
 
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.5.0"
 REPORT_PATH = Path.home() / "DUALORA" / "diagnostics.json"
 
 
@@ -136,6 +137,7 @@ class App:
         ttk.Button(tools, text="Профиль Работа", command=lambda: self.quick_profile("Работа")).pack(side="left", padx=4)
         ttk.Button(tools, text="Профиль Игры", command=lambda: self.quick_profile("Игры")).pack(side="left", padx=4)
         ttk.Button(tools, text="Видеорежим", command=self.choose_video_mode).pack(side="left", padx=4)
+        ttk.Button(tools, text="Журнал", command=self.show_history).pack(side="left", padx=4)
         ttk.Checkbutton(host, text="Предлагать профиль при подключении экрана",
                         variable=self.auto_profile).pack(anchor="w")
         self.refresh()
@@ -173,6 +175,24 @@ class App:
         canvas.create_text(20, 132, anchor="w", fill="#93aac6",
                            text="Перетащите экран мышью; для применения подтвердите изменение")
 
+
+    def show_history(self):
+        popup = tk.Toplevel(self.root)
+        popup.title("DUALORA · Журнал событий")
+        popup.geometry("760x420")
+        view = tk.Text(popup, bg="#172337", fg="#e6eef9", wrap="word",
+                       padx=16, pady=14, font=("Consolas", 10))
+        view.pack(fill="both", expand=True)
+        for entry in reversed(read_history()[-100:]):
+            view.insert("end", entry["timestamp"] + "  [" + entry["type"] + "] " +
+                        entry["detail"] + "\\n")
+        view.configure(state="disabled")
+
+    def audit(self, kind, detail):
+        try:
+            add_event(kind, detail)
+        except OSError:
+            pass
 
     def drag_start(self, event):
         for x1, y1, x2, y2, index in reversed(self.diagram_regions):
@@ -227,6 +247,7 @@ class App:
                 return
             before = {key: int(display[key]) for key in ("width", "height", "hz")}
             apply_video_mode(display["device"], shown[selected-1])
+            self.audit("mode", display["device"] + " -> " + str(shown[selected-1]))
             self.confirm_change(lambda: apply_video_mode(display["device"], before))
         except Exception as exc:
             messagebox.showerror("Видеорежим", str(exc))
@@ -258,6 +279,7 @@ class App:
             added = bool(set(devices) - set(self.known_devices))
             if devices != self.known_devices:
                 self.known_devices = devices
+                self.audit("connection", "active display devices: " + ",".join(devices))
                 self.refresh()
                 if added and self.auto_profile.get():
                     self.root.after(100, self.offer_profile)
@@ -315,6 +337,7 @@ class App:
         if not messagebox.askyesno("Подтверждение", f"Применить профиль «{name}»?"):
             return
         apply_positions(profile)
+        self.audit("layout", "requested profile: " + name)
         # Tk message boxes enter a nested event loop on Windows, allowing after()
         # to enforce the timeout even without another user action.
         state = {"done": False}
@@ -421,12 +444,21 @@ class App:
                   "Эти записи не гарантируют наличие изображения."]
         for item in self.identifiers:
             lines.append(f"• {item.get('InstanceName', 'Unknown')} · Active={item.get('Active', '?')}")
+        lines += ["", "ДИАГНОСТИКА ПОДКЛЮЧЕНИЯ"]
+        if any("AQ32H3" in (d["monitor"] + " " + d["monitor_id"]).upper() for d in self.details):
+            lines.append("AQ32H3 обнаружен в активном режиме Windows.")
+        elif any("AQ32H3" in str(v).upper() for v in self.identifiers):
+            lines.append("AQ32H3 обнаружен WMI, но привязка к активному видеовыходу не подтверждена.")
+        else:
+            lines.append("AQ32H3 не идентифицирован; имя может быть скрыто адаптером/драйвером.")
+        lines.append("Активный видеорежим не подтверждает исправность HDMI/DP кабеля и изображения.")
         lines += ["", "ПОДСКАЗКА"]
         if count >= 2:
             lines.append("Два экрана активны в Windows. Если один чёрный, проверьте вход HDMI/DP, кабель и частоту обновления в параметрах дисплея.")
         else:
             lines.append("Расширенный рабочий стол пока не подтверждён. Проверьте HDMI/DP, вход Source на мониторе и нажмите «Расширить экраны».")
         self.write("\n".join(lines))
+        self.audit("scan", "active=" + str(count) + "; displays=" + ",".join(d["device"] for d in self.details))
         self.draw_diagram()
 
     def change(self, mode):
