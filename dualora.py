@@ -13,7 +13,7 @@ from tkinter import ttk, messagebox, simpledialog
 from display_engine import enumerate_displays, position_snapshot, read_profiles, save_profile, apply_positions
 from datetime import datetime
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.3.0"
 REPORT_PATH = Path.home() / "DUALORA" / "diagnostics.json"
 
 
@@ -118,6 +118,96 @@ class App:
         self.error = None
         ttk.Button(extras, text="Сохранить профиль", command=self.save_layout).pack(side="left", padx=4)
         ttk.Button(extras, text="Применить профиль", command=self.restore_layout).pack(side="left", padx=4)
+        self.diagram = tk.Canvas(host, height=140, bg="#172337", highlightthickness=0)
+        self.diagram.pack(fill="x", pady=(8, 4))
+        self.diagram.bind("<Configure>", lambda event: self.draw_diagram())
+        tools = ttk.Frame(host)
+        tools.pack(fill="x", pady=4)
+        ttk.Button(tools, text="Мастер чёрного экрана", command=self.troubleshoot).pack(side="left", padx=4)
+        ttk.Button(tools, text="Профиль Работа", command=lambda: self.quick_profile("Работа")).pack(side="left", padx=4)
+        ttk.Button(tools, text="Профиль Игры", command=lambda: self.quick_profile("Игры")).pack(side="left", padx=4)
+        self.refresh()
+
+    def draw_diagram(self):
+        if not hasattr(self, "diagram"):
+            return
+        canvas = self.diagram
+        canvas.delete("all")
+        screens = self.details
+        if not screens:
+            canvas.create_text(20, 65, anchor="w", fill="#e5edfa",
+                               text="Нет активных видеорежимов. Нажмите «Обновить диагностику».")
+            return
+        min_x = min(d["x"] for d in screens)
+        min_y = min(d["y"] for d in screens)
+        full_w = max(d["x"] + d["width"] for d in screens) - min_x
+        full_h = max(d["y"] + d["height"] for d in screens) - min_y
+        scale = min((max(canvas.winfo_width(), 300) - 50) / max(full_w, 1),
+                    110 / max(full_h, 1))
+        for index, d in enumerate(screens, 1):
+            x = 20 + (d["x"] - min_x) * scale
+            y = 12 + (d["y"] - min_y) * scale
+            w = d["width"] * scale
+            h = d["height"] * scale
+            canvas.create_rectangle(x, y, x + w, y + h, outline="#58c7ff",
+                                    fill="#263e59", width=2)
+            canvas.create_text(x + w / 2, y + h / 2, fill="white",
+                               text=f"{index} · {d['width']}×{d['height']}")
+        canvas.create_text(20, 132, anchor="w", fill="#93aac6",
+                           text="Схема расположения (для изменения выберите профиль)")
+
+    def quick_profile(self, name):
+        try:
+            profiles = read_profiles()
+            if name in profiles:
+                self.apply_named_profile(name, profiles[name])
+            elif messagebox.askyesno("Новый профиль", f"Сохранить текущее расположение как «{name}»?"):
+                save_profile(name, enumerate_displays())
+                messagebox.showinfo("Готово", "Профиль сохранён.")
+        except Exception as exc:
+            messagebox.showerror("Профиль", str(exc))
+
+    def troubleshoot(self):
+        count = len(self.details)
+        matches = [d for d in self.details if "AQ32H3" in
+                   (d["monitor"] + d["monitor_id"]).upper()]
+        if count >= 2:
+            status = "Windows сообщает о нескольких активных видеорежимах."
+        else:
+            status = "Windows не подтверждает второй активный рабочий экран."
+        model = ("AQ32H3 обнаружен в активном видеорежиме." if matches else
+                 "AQ32H3 не идентифицирован по имени активного видеовыхода.")
+        messagebox.showinfo("Мастер диагностики AQ32H3",
+            status + "\n" + model + "\n\n"
+            "1. Выберите на мониторе нужный HDMI / DP через Input / Source.\n"
+            "2. Проверьте соединение кабеля с двух сторон.\n"
+            "3. Выберите «Расширить экраны», затем обновите диагностику.\n"
+            "4. В параметрах Windows проверьте разрешение и частоту 60 Гц (если доступна).\n\n"
+            "Важно: ПО не способно измерить физический HDMI/DP-сигнал.")
+
+    def apply_named_profile(self, name, profile):
+        previous = position_snapshot(enumerate_displays())
+        if not messagebox.askyesno("Подтверждение", f"Применить профиль «{name}»?"):
+            return
+        apply_positions(profile)
+        # Tk message boxes enter a nested event loop on Windows, allowing after()
+        # to enforce the timeout even without another user action.
+        state = {"done": False}
+        def revert():
+            if not state["done"]:
+                state["done"] = True
+                try:
+                    apply_positions(previous)
+                except Exception as exc:
+                    messagebox.showerror("Откат", str(exc))
+        timer = self.root.after(15000, revert)
+        accepted = messagebox.askyesno("Проверка расположения", "Всё видно? Сохранить новое расположение.")
+        if accepted and not state["done"]:
+            state["done"] = True
+            self.root.after_cancel(timer)
+        elif not state["done"]:
+            self.root.after_cancel(timer)
+            revert()
         self.refresh()
 
     def save_layout(self):
@@ -212,6 +302,7 @@ class App:
         else:
             lines.append("Расширенный рабочий стол пока не подтверждён. Проверьте HDMI/DP, вход Source на мониторе и нажмите «Расширить экраны».")
         self.write("\n".join(lines))
+        self.draw_diagram()
 
     def change(self, mode):
         if not messagebox.askyesno("Изменение режима", "Windows переключит режим дисплеев. Продолжить?"):
