@@ -12,7 +12,7 @@ class TestFrames(unittest.TestCase):
     def test_csv(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/"frames.csv"
-            p.write_text("MsBetweenPresents\\n16.67\\n33.33\\n",encoding="utf-8")
+            p.write_text("MsBetweenPresents\n16.67\n33.33\n",encoding="utf-8")
             self.assertEqual(len(load_presentmon(p)),2)
     def test_empty(self):
         self.assertIsNone(summary([])["fps"])
