@@ -9,14 +9,15 @@ from pathlib import Path
 import platform
 import subprocess
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import ttk, messagebox, simpledialog, filedialog
 from display_engine import enumerate_displays, position_snapshot, read_profiles, save_profile, apply_positions, available_modes, apply_video_mode
 from datetime import datetime
 from history import add_event, read_history
 from quality_advisor import recommend
+from wallpaper_tools import apply_wallpaper, account_label, refresh_explanation
 from cursor_layout import arrange_side_by_side
 
-APP_VERSION = "0.6.0"
+APP_VERSION = "0.7.0"
 REPORT_PATH = Path.home() / "DUALORA" / "diagnostics.json"
 
 
@@ -146,6 +147,11 @@ class App:
         ttk.Button(cursor_controls, text="СЛЕВА", command=lambda: self.fix_cursor("left")).pack(side="left", padx=4)
         ttk.Button(cursor_controls, text="СПРАВА", command=lambda: self.fix_cursor("right")).pack(side="left", padx=4)
         ttk.Button(tools, text="Качество изображения", command=self.image_quality).pack(side="left", padx=4)
+        visual = ttk.Frame(host)
+        visual.pack(fill="x", pady=4)
+        ttk.Button(visual, text="Обои 5K", command=self.wallpaper_5k).pack(side="left", padx=4)
+        ttk.Button(visual, text="Герцовка и FPS", command=self.refresh_help).pack(side="left", padx=4)
+        ttk.Button(visual, text="Пользователь Windows", command=self.account_info).pack(side="left", padx=4)
         ttk.Checkbutton(host, text="Предлагать профиль при подключении экрана",
                         variable=self.auto_profile).pack(anchor="w")
         self.refresh()
@@ -370,6 +376,35 @@ class App:
             self.refresh()
         except Exception as exc:
             messagebox.showerror("Качество изображения", str(exc))
+
+    def wallpaper_5k(self):
+        chosen = filedialog.askopenfilename(parent=self.root,
+            title="Выберите собственные обои 5K (или другой размер)",
+            filetypes=[("Изображения", "*.jpg *.jpeg *.png *.bmp")])
+        if not chosen:
+            return
+        if not messagebox.askyesno("Установка обоев",
+                "Применить выбранное изображение как фон рабочего стола Windows? "
+                "Разрешение изображения не будет искусственно увеличено."):
+            return
+        try:
+            apply_wallpaper(chosen)
+            messagebox.showinfo("Обои", "Фон рабочего стола изменён.")
+        except Exception as exc:
+            messagebox.showerror("Обои", str(exc))
+
+    def refresh_help(self):
+        if not self.details:
+            messagebox.showwarning("Дисплеи", "Не обнаружен активный экран.")
+            return
+        lines = [d["device"] + ": " + refresh_explanation(d["hz"]) for d in self.details]
+        lines.append("Для выбора поддерживаемой частоты нажмите «Качество изображения» или «Видеорежим».")
+        messagebox.showinfo("Частота и FPS", "\\n".join(lines))
+
+    def account_info(self):
+        messagebox.showinfo("Пользователь Windows",
+            "Текущая учётная запись: " + account_label() +
+            "\\nDUALORA использует текущий вход Windows и не собирает пароли.")
 
     def quick_profile(self, name):
         try:
