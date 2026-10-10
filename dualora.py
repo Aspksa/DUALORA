@@ -139,7 +139,7 @@ class App:
             if not profiles:
                 messagebox.showinfo("Профили", "Пока нет сохранённых профилей.")
                 return
-            name = simpledialog.askstring("Профили", "Название профиля:\\n" + "\\n".join(profiles), parent=self.root)
+            name = simpledialog.askstring("Профили", "Название профиля:\n" + "\n".join(profiles), parent=self.root)
             if name is None:
                 return
             if name not in profiles:
@@ -200,7 +200,7 @@ class App:
             lines.append("Активные области не обнаружены.")
         lines += ["", "ИДЕНТИФИКАЦИЯ МОНИТОРОВ / ВИДЕОРЕЖИМЫ"]
         for d in self.details:
-            lines.append(f"{d[\'device\']}: {d[\'monitor\']} | {d[\'width\']}x{d[\'height\']} @ {d[\'hz\']} Hz | ({d[\'x\']}, {d[\'y\']})")
+            lines.append(f"{d['device']}: {d['monitor']} | {d['width']}x{d['height']} @ {d['hz']} Hz | ({d['x']}, {d['y']})")
             lines.append("  Device ID: " + d["monitor_id"])
         lines += ["", f"ЗАПИСИ ПОДКЛЮЧЁННЫХ МОНИТОРОВ (WMI): {len(self.identifiers)}",
                   "Эти записи не гарантируют наличие изображения."]
