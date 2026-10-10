@@ -13,9 +13,10 @@ from tkinter import ttk, messagebox, simpledialog
 from display_engine import enumerate_displays, position_snapshot, read_profiles, save_profile, apply_positions, available_modes, apply_video_mode
 from datetime import datetime
 from history import add_event, read_history
+from quality_advisor import recommend
 from cursor_layout import arrange_side_by_side
 
-APP_VERSION = "0.5.1"
+APP_VERSION = "0.6.0"
 REPORT_PATH = Path.home() / "DUALORA" / "diagnostics.json"
 
 
@@ -76,7 +77,7 @@ def switch_display(mode):
 class App:
     def __init__(self, root):
         self.root = root
-        root.title("DUALORA · Мониторы")
+        root.title("DUALORA · Visual Quality Control")
         root.geometry("760x590")
         root.minsize(640, 480)
         root.configure(bg="#101827")
@@ -144,6 +145,7 @@ class App:
         ttk.Label(cursor_controls, text="Переход мыши: внешний экран").pack(side="left", padx=4)
         ttk.Button(cursor_controls, text="СЛЕВА", command=lambda: self.fix_cursor("left")).pack(side="left", padx=4)
         ttk.Button(cursor_controls, text="СПРАВА", command=lambda: self.fix_cursor("right")).pack(side="left", padx=4)
+        ttk.Button(tools, text="Качество изображения", command=self.image_quality).pack(side="left", padx=4)
         ttk.Checkbutton(host, text="Предлагать профиль при подключении экрана",
                         variable=self.auto_profile).pack(anchor="w")
         self.refresh()
@@ -326,6 +328,48 @@ class App:
                 "\\nПроверьте Win+P → Расширить и нажмите «Обновить диагностику».")
         except Exception as exc:
             messagebox.showerror("Переход мыши", str(exc))
+
+    def image_quality(self):
+        if not self.details:
+            messagebox.showwarning("Качество", "Активные мониторы не обнаружены.")
+            return
+        selection = simpledialog.askinteger("Качество изображения",
+            "Номер экрана: 1–" + str(len(self.details)),
+            parent=self.root, minvalue=1, maxvalue=len(self.details))
+        if selection is None:
+            return
+        screen = self.details[selection-1]
+        try:
+            available = available_modes(screen["device"])
+            suggestions = recommend(available)
+            if not suggestions:
+                messagebox.showwarning("Качество", "Windows не сообщает доступные режимы.")
+                return
+            lines = ["1 — Макс. чёткость", "2 — Макс. плавность", "3 — Баланс"]
+            names = ("sharp", "smooth", "balanced")
+            for i, key in enumerate(names):
+                m = suggestions[key]
+                lines[i] += f": {m['width']}×{m['height']} @ {m['hz']} Гц"
+            selected = simpledialog.askinteger("Режим качества",
+                "\\n".join(lines) + "\\nВыберите 1, 2 или 3:",
+                parent=self.root, minvalue=1, maxvalue=3)
+            if selected is None:
+                return
+            target = suggestions[names[selected-1]]
+            message = ("Режимы определены по Windows, максимальное разрешение может "
+                       "не совпадать с нативным. Для чёткого текста проверьте "
+                       "рекомендуемый масштаб Windows и настройте ClearType. "
+                       "Яркость, резкость и цветовой охват на некоторых мониторах "
+                       "управляются только через меню монитора.\\n\\n"
+                       f"Применить {target['width']}×{target['height']} @ {target['hz']} Гц?")
+            if not messagebox.askyesno("Качество изображения", message):
+                return
+            before = {k: int(screen[k]) for k in ("width", "height", "hz")}
+            apply_video_mode(screen["device"], target)
+            self.confirm_change(lambda: apply_video_mode(screen["device"], before))
+            self.refresh()
+        except Exception as exc:
+            messagebox.showerror("Качество изображения", str(exc))
 
     def quick_profile(self, name):
         try:
