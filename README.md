@@ -1,22 +1,19 @@
-# DUALORA v0.4.0 — Interactive Display Control
+# DUALORA 0.5.0 — Display Control & Diagnostics
 
-Windows 10/11 utility for two or more desktop displays.
+Windows 10/11 multi-monitor utility. Tkinter UI with draggable monitor diagram, supported mode selection, positional profiles and opt-in connection watcher.
 
-## New in v0.4.0
-- Drag monitor rectangles in the Control Center layout, then confirm or revert (15-second timeout while app is running).
-- Select supported video resolution and refresh rate through native Windows display API, with preflight validation and confirmation.
-- Optional 5-second polling detects new Windows desktop displays and **offers** to restore a matching named monitor profile. It never changes profiles without consent.
-- Work / Games presets, AQ32H3 troubleshooting, diagnostics JSON, portable EXE.
+## v0.5.0
+- Dedicated **Журнал** history window for diagnostic scans and changes.
+- Local bounded JSON Lines journal under `%USERPROFILE%\\DUALORA\\history.jsonl`, last 500 events.
+- AQ32H3 recognition cross-checks active Windows display mode and WMI EDID records.
+- Clear warnings about monitor signal limitations and driver-dependent identification.
+- Portable Python-free executable via GitHub Actions `DUALORA-Windows-v0.5.0`.
 
-## Installation
-Open the successful GitHub Actions run and download the `DUALORA-Windows-v0.4.0` artifact ZIP. Unzip and launch `DUALORA.exe` without installing Python.
+## Limitations
+This application cannot measure physical HDMI/DP voltage or confirm that the monitor displays a visible image. Diagrammatic screen positioning is based on Windows display geometry. Safety rollback requires the application to remain active. Windows drivers may omit manufacturer/model information. History is stored locally, without cloud upload.
 
-## Safety and limits
-- The tool reads modes exposed by the GPU/display driver, **not** actual HDMI voltage or physical pixel output.
-- Monitor IDs (e.g. AQ32H3) are driver dependent.
-- Timeout rollback needs a running Tk event loop; Windows may not restore configuration after a system crash or application termination. Keep access to Windows Display settings.
-- Connection detection uses polling and prompts; it does not silently apply saved configurations.
-- The preview is diagrammatic and drag moves can require further fine-tuning in Windows Settings.
+## Install
+GitHub Actions → successful DUALORA checks run → Artifacts → DUALORA-Windows-v0.5.0 → unzip and run DUALORA.exe.
 
 ## Tests
 `python -m unittest discover -s tests -v`.
